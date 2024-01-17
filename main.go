@@ -17,6 +17,7 @@ var upgrader = websocket.Upgrader{
 type client struct {
 	conn     *websocket.Conn
 	username string
+	Group    string
 }
 
 var (
@@ -29,6 +30,8 @@ type Message struct {
 	Username string `json:"username"`
 	Message  string `json:"message"`
 	Target   string `json:"target"`
+	Group    string `json:"group"`
+	Action   string `json:"action"`
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
@@ -70,32 +73,46 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Printf("Received message from %s: %s\n", client.username, msg.Message)
 
-		switch msg.Target {
+		switch msg.Action {
 		case "all":
-			// Broadcast the message to all users
 			broadcast <- msg
-		case "group1":
-			// Send the message to users in the "group1" group
-			sendToGroup(client, "group1", msg.Message)
+		case "sendMessage":
+			sendToGroup(client, msg.Target, msg.Message)
+		case "joinGroup":
+			joinGroup(client, msg.Group)
+			// Optionally, send a confirmation message back to the user
+			replyMessage := Message{
+				Username: "Server",
+				Message:  fmt.Sprintf("You joined group %s", msg.Group),
+			}
+			err := client.conn.WriteJSON(replyMessage)
+			if err != nil {
+				fmt.Println("Error sending joinGroup confirmation:", err)
+			}
 		default:
-			fmt.Println("Unknown target:", msg.Target)
+			fmt.Println("Unknown action:", msg.Action)
 		}
 	}
 }
-
-func sendToGroup(sender *client, group, content string) {
+func joinGroup(client *client, group string) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 
-	if group == "" {
-		return
-	}
+	client.Group = group
+	fmt.Printf("User %s joined group %s\n", client.username, group)
+}
+
+// New function to handle sending a message to a specific group
+func sendToGroup(sender *client, targetGroup, content string) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
 
 	for client := range clients {
-		if client != sender {
+		if client != sender && client.Group == targetGroup {
 			err := client.conn.WriteJSON(Message{
 				Username: sender.username,
 				Message:  content,
+				Target:   targetGroup,
 			})
 			if err != nil {
 				fmt.Println("Error sending message to", client.username, ":", err)
@@ -141,3 +158,31 @@ func main() {
 		fmt.Println("Error starting server:", err)
 	}
 }
+
+// the below is to register the new user:
+// {
+//     "action": "setUsername",
+//     "username": "User4"
+// }
+
+// the below is to add user in group1 after registration in postman:
+// {
+// 	"action": "joinGroup",
+// 	"username": "User2",
+// 	"group": "group1"
+// }
+
+// the below is to send meg to all the users in postman:
+// {
+//     "action": "all",
+//     "content": "Hello, everyone!",
+//     "username": "YourUsername"
+// }
+
+// now below is to send the message to the group1:
+// {
+//     "action": "sendMessage",
+//     "content": "Hello, Group1!",
+//     "username": "User1",
+//     "target": "group1"
+// }
