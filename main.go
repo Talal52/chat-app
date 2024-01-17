@@ -42,7 +42,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Prompt the user for their username
 	username := promptUsername(conn)
 
 	client := &client{
@@ -80,7 +79,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			sendToGroup(client, msg.Target, msg.Message)
 		case "joinGroup":
 			joinGroup(client, msg.Group)
-			// Optionally, send a confirmation message back to the user
 			replyMessage := Message{
 				Username: "Server",
 				Message:  fmt.Sprintf("You joined group %s", msg.Group),
@@ -102,7 +100,6 @@ func joinGroup(client *client, group string) {
 	fmt.Printf("User %s joined group %s\n", client.username, group)
 }
 
-// New function to handle sending a message to a specific group
 func sendToGroup(sender *client, targetGroup, content string) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
@@ -152,7 +149,6 @@ func main() {
 
 	go handleMessages()
 
-	// Start the server on localhost:8080
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println("Error starting server:", err)
